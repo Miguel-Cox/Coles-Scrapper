@@ -20,7 +20,7 @@ def dump_categories(categories):
 
 if __name__ == "__main__":
 
-    driver, service = initialize_driver()
+    driver = initialize_driver()
     driver.implicitly_wait(15)
 
     page = CategoriesPage(driver=driver)
@@ -31,4 +31,3 @@ if __name__ == "__main__":
         dump_categories(found_categories)
 
     driver.quit()
-    service.stop()

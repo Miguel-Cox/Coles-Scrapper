@@ -23,7 +23,7 @@ def dump_products(category, products):
 
 if __name__ == "__main__":
 
-    driver, service = initialize_driver()
+    driver = initialize_driver()
     driver.implicitly_wait(15)
 
     page_num = 1
@@ -47,4 +47,3 @@ if __name__ == "__main__":
         dump_products(TARGET_CATEGORY, products=products)
 
     driver.quit()
-    service.stop()

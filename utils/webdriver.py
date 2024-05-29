@@ -1,7 +1,6 @@
 import os
 from dotenv import load_dotenv, find_dotenv
-from selenium import webdriver
-from selenium.webdriver.chrome.service import Service as ChromeService
+import undetected_chromedriver as uc
 
 
 def initialize_driver(executable_path=None, headless=False):
@@ -12,15 +11,11 @@ def initialize_driver(executable_path=None, headless=False):
             executable_path = os.environ["CHROMEDRIVER_PATH"]
         except KeyError as e:
             raise KeyError("Cannot find .env file with `CHROMEDRIVER_PATH`") from e
-
-    service = ChromeService(executable_path=executable_path)
-    service.start()
-    options = webdriver.ChromeOptions()
+    options = uc.ChromeOptions()
     options.add_argument("--log-level=3")
-    options.add_experimental_option("excludeSwitches", ["enable-logging"])
     if headless:
         options.add_argument("--headless")
 
-    driver = webdriver.Remote(service.service_url, options=options)
+    driver = uc.Chrome(options=options, driver_executable_path=executable_path)
 
-    return driver, service
+    return driver
