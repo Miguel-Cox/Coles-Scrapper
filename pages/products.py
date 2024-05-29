@@ -34,8 +34,16 @@ class ProductsPage(BasePage):
     def list_products(self):
         if not self._are_product_cards_visible():
             return []
+        
+        # Temporarily reduce implicit wait time to speed up collection
+        self.driver.implicitly_wait(2)
+        
         cards = self.find_elements(ProductsPageLocators.PRODUCT_CARD)
         products = [self.scrape_product_details(card) for card in cards]
+        
+        # Reset implicit wait once collection is complete
+        self.driver.implicitly_wait(15)
+        
         return products
 
     def _are_product_cards_visible(self, timeout=30):
