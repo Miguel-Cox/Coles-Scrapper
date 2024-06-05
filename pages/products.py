@@ -3,7 +3,8 @@
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from selenium.common.exceptions import NoSuchElementException, TimeoutException
+from selenium.common.exceptions import TimeoutException
+from bs4 import BeautifulSoup, element
 from pages.base import BasePage
 
 
@@ -14,12 +15,13 @@ class ProductsPageLocators:
     """
 
     PRODUCT_CARD = (By.XPATH, '//*[@data-testid="product-tile"]')
-    PRODUCT_NAME = (By.CLASS_NAME, "product__title")
-    PRODUCT_URL = (By.CLASS_NAME, "product__link")
-    PRODUCT_PRICE = (By.CLASS_NAME, "price")
-    PRODUCT_PRICE_CALC_METHOD = (By.CLASS_NAME, "price__calculation_method")
-    PRODUCT_PRICE_CALC_DESC = (By.CLASS_NAME, "price__calculation_method__description")
-    PRODUCT_IMAGE = (By.TAG_NAME, "img")
+    # # Unused locators retained for future use.
+    # PRODUCT_NAME = (By.CLASS_NAME, "product__title")
+    # PRODUCT_URL = (By.CLASS_NAME, "product__link")
+    # PRODUCT_PRICE = (By.CLASS_NAME, "price")
+    # PRODUCT_PRICE_CALC_METHOD = (By.CLASS_NAME, "price__calculation_method")
+    # PRODUCT_PRICE_CALC_DESC = (By.CLASS_NAME, "price__calculation_method__description")
+    # PRODUCT_IMAGE = (By.TAG_NAME, "img")
 
 
 class ProductsPage(BasePage):
@@ -34,16 +36,9 @@ class ProductsPage(BasePage):
     def list_products(self):
         if not self._are_product_cards_visible():
             return []
-        
-        # Temporarily reduce implicit wait time to speed up collection
-        self.driver.implicitly_wait(2)
-        
-        cards = self.find_elements(ProductsPageLocators.PRODUCT_CARD)
+        soup = BeautifulSoup(self.driver.page_source, "html.parser")
+        cards = soup.find_all("section", attrs={"data-testid": "product-tile"})
         products = [self.scrape_product_details(card) for card in cards]
-        
-        # Reset implicit wait once collection is complete
-        self.driver.implicitly_wait(15)
-        
         return products
 
     def _are_product_cards_visible(self, timeout=30):
@@ -58,29 +53,26 @@ class ProductsPage(BasePage):
 
     @staticmethod
     def scrape_product_details(card):
-        product = {}
-        key_loc_attr = [
-            ("name", ProductsPageLocators.PRODUCT_NAME, "textContent"),
-            ("url", ProductsPageLocators.PRODUCT_URL, "href"),
-            ("price", ProductsPageLocators.PRODUCT_PRICE, "textContent"),
-            (
-                "price_calc_method",
-                ProductsPageLocators.PRODUCT_PRICE_CALC_METHOD,
-                "textContent",
+        name_element = card.find("h2", class_="product__title")
+        url_element = card.find("a", class_="product__link")
+        price_element = card.find("span", class_="price__value")
+        price_calc_method_element = card.find("div", class_="price__calculation_method")
+        price_calc_desc_element = card.find(
+            "div", class_="price__calculation_method__description"
+        )
+        image_element = card.find("img")
+
+        product = {
+            "name": name_element.text if name_element else None,
+            "url": url_element.attrs["href"] if url_element else None,
+            "price": price_element.text if price_element else None,
+            "price_calc_method": (
+                price_calc_method_element.text if price_calc_method_element else None
             ),
-            (
-                "price_calc_desc",
-                ProductsPageLocators.PRODUCT_PRICE_CALC_DESC,
-                "textContent",
+            "price_calc_desc": (
+                price_calc_desc_element.text if price_calc_desc_element else None
             ),
-            ("image_url", ProductsPageLocators.PRODUCT_IMAGE, "src"),
-        ]
-        for key, locator, attr in key_loc_attr:
-            try:
-                elem = card.find_element(*locator)
-            except NoSuchElementException:
-                product[key] = None
-            else:
-                product[key] = elem.get_attribute(attr)
+            "image_url": image_element.attrs["src"] if image_element else None,
+        }
 
         return product
