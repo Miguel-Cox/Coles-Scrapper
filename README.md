@@ -1,6 +1,6 @@
 # Coles Scraper
 
-Coles Scraper is web scraping tool designed to automate the extraction of product details from the [Coles](https://www.coles.com.au/) website. This project uses [Selenium](https://www.selenium.dev/) for browser automation, following the [Page Object Model](https://www.browserstack.com/guide/page-object-model-in-selenium#:~:text=Page%20Object%20Model%2C%20also%20known,application%20as%20a%20class%20file.) pattern to structure the code.
+Coles Scraper is a collection of web scraping utilities designed to automate the extraction of product details from the [Coles](https://www.coles.com.au/) website. This project uses [Selenium](https://www.selenium.dev/) for browser automation, following the [Page Object Model](https://www.browserstack.com/guide/page-object-model-in-selenium#:~:text=Page%20Object%20Model%2C%20also%20known,application%20as%20a%20class%20file.) pattern to structure the code.
 
 **Disclaimer**: This is a hobby project for my personal portfolio. Please scrape responsibly and adhere to website terms of service.
 
