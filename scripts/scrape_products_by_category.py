@@ -98,9 +98,10 @@ def update_product_cards_dataset(processed_products_df):
 
 def scrape_products_for_categories():
     """Scrapes product data for all target categories and saves them."""
+    scraper = ScrapeProductCardsByCategoryCommand()
     for category in TARGET_CATEGORIES:
         logging.info(f"Starting to scrape category: {category}")
-        scraper = ScrapeProductCardsByCategoryCommand(category)
+        scraper.set_category(category)
         try:
             products = scraper.run(max_pages=MAX_PAGES)
             if products:

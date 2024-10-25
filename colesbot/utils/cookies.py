@@ -6,7 +6,7 @@ import selenium.webdriver.support.expected_conditions as EC
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 
-from utils.webdriver import init_seleniumwire_webdriver
+from colesbot.utils.webdriver import init_seleniumwire_webdriver
 
 
 class CookieManager:
