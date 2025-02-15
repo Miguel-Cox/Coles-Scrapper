@@ -5,7 +5,7 @@ from dotenv import find_dotenv, load_dotenv
 from seleniumwire.undetected_chromedriver.v2 import Chrome, ChromeOptions
 
 
-def initialize_driver(executable_path=None, headless=False):
+def initialize_driver(executable_path=None, headless=False, implicit_wait: int = None):
     if executable_path is None:
         dotenv_path = find_dotenv()
         load_dotenv(dotenv_path)
@@ -19,6 +19,8 @@ def initialize_driver(executable_path=None, headless=False):
         options.add_argument("--headless")
 
     driver = uc.Chrome(options=options, driver_executable_path=executable_path)
+    if implicit_wait and isinstance(implicit_wait, (int, float)):
+        driver.implicitly_wait(implicit_wait)
 
     return driver
 
