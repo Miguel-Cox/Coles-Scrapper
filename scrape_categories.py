@@ -2,20 +2,21 @@
 Script to scrape all available categories on the Coles website.
 """
 
-import os
 import json
+import os
+
 import chromedriver_autoinstaller
 
-from utils.webdriver import initialize_driver
-from pages.categories import CategoriesPage
+from colesbot.pages.categories import CategoriesPage
+from colesbot.utils.webdriver import initialize_driver
 
 DEST_DIR = "./data/raw"
+DEST_FILEPATH = os.path.join(DEST_DIR, "product-categories.json")
 
 
 def dump_categories(categories):
     os.makedirs(DEST_DIR, exist_ok=True)
-    categories_file = os.path.join(DEST_DIR, "product-categories.json")
-    with open(categories_file, "w") as dst:
+    with open(DEST_FILEPATH, "w") as dst:
         json.dump(categories, dst)
 
 

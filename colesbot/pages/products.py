@@ -5,7 +5,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException
 from bs4 import BeautifulSoup, element
-from pages.base import BasePage
+from colesbot.pages.base import BasePage
 
 
 class ProductsPageLocators:

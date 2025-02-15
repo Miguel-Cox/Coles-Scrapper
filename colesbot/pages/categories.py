@@ -1,7 +1,7 @@
 """Categories page of the Coles website"""
 
 from selenium.webdriver.common.by import By
-from pages.base import BasePage
+from colesbot.pages.base import BasePage
 
 
 class CategoriesPageLocators:
