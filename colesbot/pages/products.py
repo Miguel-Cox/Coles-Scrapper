@@ -1,11 +1,13 @@
 """Products page of the Coles website"""
 
+from typing import List
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException
-from bs4 import BeautifulSoup, element
 from colesbot.pages.base import BasePage
+from src.models import ProductTile
+from src.scrapers import ColesProductTileScraper
 
 
 class ProductsPageLocators:
@@ -27,18 +29,19 @@ class ProductsPageLocators:
 class ProductsPage(BasePage):
     """Products page action methods come here"""
 
+    scraper_cls = ColesProductTileScraper
+
     def __init__(self, driver, category, page=1):
         super().__init__(driver=driver)
         self.url = f"https://www.coles.com.au/browse/{category}"
         if page > 1:
             self.url += f"?page={page}"
 
-    def list_products(self):
+    def list_products(self) -> List[ProductTile]:
         if not self._are_product_cards_visible():
-            return []
-        soup = BeautifulSoup(self.driver.page_source, "html.parser")
-        cards = soup.find_all("section", attrs={"data-testid": "product-tile"})
-        products = [self.scrape_product_details(card) for card in cards]
+            products = []
+        scraper = self.scraper_cls(html_content=self.driver.page_source)
+        products = scraper.get_all_products()
         return products
 
     def _are_product_cards_visible(self, timeout=30):
@@ -50,29 +53,3 @@ class ProductsPage(BasePage):
             return True
         except TimeoutException:
             return False
-
-    @staticmethod
-    def scrape_product_details(card):
-        name_element = card.find("h2", class_="product__title")
-        url_element = card.find("a", class_="product__link")
-        price_element = card.find("span", class_="price__value")
-        price_calc_method_element = card.find("div", class_="price__calculation_method")
-        price_calc_desc_element = card.find(
-            "div", class_="price__calculation_method__description"
-        )
-        image_element = card.find("img")
-
-        product = {
-            "name": name_element.text if name_element else None,
-            "url": url_element.attrs["href"] if url_element else None,
-            "price": price_element.text if price_element else None,
-            "price_calc_method": (
-                price_calc_method_element.text if price_calc_method_element else None
-            ),
-            "price_calc_desc": (
-                price_calc_desc_element.text if price_calc_desc_element else None
-            ),
-            "image_url": image_element.attrs["src"] if image_element else None,
-        }
-
-        return product

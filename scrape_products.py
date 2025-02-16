@@ -18,7 +18,8 @@ def dump_products(category, products):
     os.makedirs(DEST_DIR, exist_ok=True)
     products_file = os.path.join(DEST_DIR, f"{category}-products.json")
     with open(products_file, "w") as dst:
-        json.dump(products, dst)
+        products_json = [product.dict() for product in products]
+        json.dump(products_json, dst)
 
 
 if __name__ == "__main__":
