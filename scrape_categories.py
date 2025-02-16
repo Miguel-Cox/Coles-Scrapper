@@ -5,8 +5,6 @@ Script to scrape all available categories on the Coles website.
 import json
 import os
 
-import chromedriver_autoinstaller
-
 from colesbot.pages.categories import CategoriesPage
 from colesbot.utils.webdriver import initialize_driver
 
@@ -22,8 +20,7 @@ def dump_categories(categories):
 
 if __name__ == "__main__":
 
-    chromedriver_path = chromedriver_autoinstaller.install()
-    driver = initialize_driver(executable_path=chromedriver_path, implicit_wait=15)
+    driver = initialize_driver(implicit_wait=15)
 
     page = CategoriesPage(driver=driver)
     page.open()

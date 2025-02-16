@@ -2,11 +2,11 @@
 Script to scrape all products for given categories on the Coles website.
 """
 
-import os
 import json
+import os
 
-from utils.webdriver import initialize_driver
-from pages.products import ProductsPage
+from colesbot.pages.products import ProductsPage
+from colesbot.utils.webdriver import initialize_driver
 
 DEST_DIR = "./data/raw"
 
@@ -24,8 +24,7 @@ def dump_products(category, products):
 
 if __name__ == "__main__":
 
-    driver = initialize_driver()
-    driver.implicitly_wait(15)
+    driver = initialize_driver(implicit_wait=15)
 
     page_num = 1
     products = []
