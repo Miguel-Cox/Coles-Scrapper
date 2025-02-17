@@ -5,8 +5,8 @@ Script to scrape all products for given categories on the Coles website.
 import json
 import os
 
-from colesbot.pages.products import ProductsPage
-from colesbot.utils.webdriver import initialize_driver
+from src.fetcher import ColesPageFetcher
+from src.scrapers import ColesProductTileScraper
 
 DEST_DIR = "./data/raw"
 
@@ -24,18 +24,27 @@ def dump_products(category, products):
 
 if __name__ == "__main__":
 
-    driver = initialize_driver(implicit_wait=15)
+    fetcher = ColesPageFetcher()
 
-    page_num = 1
+    category, page_num = TARGET_CATEGORY, 1
     products = []
     while True:
-        page = ProductsPage(driver=driver, category=TARGET_CATEGORY, page=page_num)
-        page.open()
+        url = f"https://www.coles.com.au/browse/{category}?page={page_num}"
 
-        found_products = page.list_products()
-        print(
-            f"({TARGET_CATEGORY}) {len(found_products)} products found on page {page_num}"
-        )
+        try:
+            response = fetcher.get(url)
+            scraper = ColesProductTileScraper(response.content)
+            found_products = scraper.get_all_products()
+        except Exception as e:
+            print(
+                "Error extracting products on page %d for category '%s': %s",
+                page_num,
+                category,
+                e,
+            )
+            found_products = []
+
+        print(f"({category}) {len(found_products)} products found on page {page_num}")
 
         if found_products:
             products.extend(found_products)
@@ -44,6 +53,4 @@ if __name__ == "__main__":
             break
 
     if products:
-        dump_products(TARGET_CATEGORY, products=products)
-
-    driver.quit()
+        dump_products(category, products=products)
