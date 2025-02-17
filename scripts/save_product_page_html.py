@@ -1,3 +1,10 @@
+"""
+This script uses a Selenium-driven browser to search for products on the Coles
+website and save the HTML content of individual product pages to local storage.
+It is designed to avoid duplicate processing by checking against an existing
+index of saved product IDs.
+"""
+
 import json
 import logging
 import os
