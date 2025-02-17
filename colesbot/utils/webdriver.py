@@ -17,7 +17,7 @@ def initialize_driver(headless=False, implicit_wait: int = None):
     return driver
 
 
-def init_seleniumwire_webdriver():
+def init_seleniumwire_webdriver(*args):
     chrome_options = ChromeOptions()
     chrome_options.add_argument("--log-level=3")
     chrome_options.add_argument("--ignore-certificate-errors")

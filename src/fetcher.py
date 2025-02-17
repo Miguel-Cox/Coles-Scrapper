@@ -33,8 +33,8 @@ class ColesPageFetcher:
 
     def __init__(
         self,
-        driver_factory: Callable = None,
-        session: requests.Session = None,
+        driver_factory: Optional[Callable] = None,
+        session: Optional[requests.Session] = None,
         headers: Optional[Dict] = None,
         refresh_urls: List[str] = None,
         sleep_func=time.sleep,
