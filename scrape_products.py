@@ -239,6 +239,6 @@ if __name__ == "__main__":
 
         dump_products(products, category)
 
-        if category == categories[-1]:
+        if category != categories[-1]:
             logger.info("Sleeping for %d seconds...", DURATION_5_MINS)
             time.sleep(DURATION_5_MINS)
