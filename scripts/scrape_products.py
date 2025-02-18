@@ -4,6 +4,7 @@ Script to scrape all products for given categories on the Coles website.
 
 import logging
 import os
+import sys
 import time
 from dataclasses import dataclass
 from datetime import datetime
@@ -11,6 +12,8 @@ from typing import List
 
 import pandas as pd
 import pytz
+
+sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 
 from src.fetcher import ColesPageFetcher
 from src.models import ProductTile
@@ -197,6 +200,8 @@ if __name__ == "__main__":
         level=logging.INFO,  # Set to INFO or WARNING in production.
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     )
+    # Silence seleniumwire logs of network requests
+    logging.getLogger("seleniumwire.handler").setLevel(logging.WARNING)
 
     categories = [
         "fruit-vegetables",
