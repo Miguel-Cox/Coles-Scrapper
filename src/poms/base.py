@@ -1,9 +1,10 @@
 """
-Base page.
+Base Page Object Model for Selenium-based interactions.
 
-All other pages should inherit from this.
+All page objects should inherit from this.
 """
 
+from selenium.common.exceptions import TimeoutException
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
 
@@ -36,3 +37,13 @@ class BasePage:
         )
         element.click()
         return element
+
+    def wait_for_element_visibility(self, locator, timeout=30) -> bool:
+        """Returns True if the element is visible within the timeout, False otherwise."""
+        try:
+            WebDriverWait(self.driver, timeout).until(
+                EC.visibility_of_element_located(locator)
+            )
+            return True
+        except TimeoutException:
+            return False
