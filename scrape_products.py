@@ -207,6 +207,9 @@ if __name__ == "__main__":
         "frozen",
         "household",
         "health-beauty",
+        "deli",
+        "pet",
+        "baby",
     ]
     headers = {
         "cookie": None,
