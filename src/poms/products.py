@@ -1,13 +1,18 @@
-"""Products page of the Coles website"""
+"""
+Page Object Mode for Coles category browsing pages.
+"""
 
 from typing import List
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
+
 from selenium.common.exceptions import TimeoutException
-from colesbot.pages.base import BasePage
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.support.ui import WebDriverWait
+
 from src.models import ProductTile
 from src.scrapers import ColesProductTileScraper
+
+from .base import BasePage
 
 
 class ProductsPageLocators:
@@ -27,29 +32,35 @@ class ProductsPageLocators:
 
 
 class ProductsPage(BasePage):
-    """Products page action methods come here"""
+    """
+    Page Object Model for Coles category browsing pages.
+
+    Represents pages listing multiple products for a given category, with URLs like:
+    - `https://www.coles.com.au/browse/<category>`
+    - `https://www.coles.com.au/browse/<category>?page=<page_number>`
+
+    Example:
+    - `https://www.coles.com.au/browse/pantry`
+    - `https://www.coles.com.au/browse/pantry?page=2`
+    """
 
     scraper_cls = ColesProductTileScraper
 
     def __init__(self, driver, category, page=1):
         super().__init__(driver=driver)
-        self.url = f"https://www.coles.com.au/browse/{category}"
+        self.url = self._build_url(category, page)
+
+    @staticmethod
+    def _build_url(category: str, page: int = 1) -> str:
+        url = f"https://www.coles.com.au/browse/{category}"
         if page > 1:
-            self.url += f"?page={page}"
+            url += f"?page={page}"
+        return url
 
     def list_products(self) -> List[ProductTile]:
-        if not self._are_product_cards_visible():
+        if self.wait_for_element_visibility(ProductsPageLocators.PRODUCT_CARD):
+            scraper = self.scraper_cls(html_content=self.driver.page_source)
+            products = scraper.get_all_products()
+        else:
             products = []
-        scraper = self.scraper_cls(html_content=self.driver.page_source)
-        products = scraper.get_all_products()
         return products
-
-    def _are_product_cards_visible(self, timeout=30):
-        try:
-            card_visible_ec = EC.visibility_of_element_located(
-                ProductsPageLocators.PRODUCT_CARD
-            )
-            WebDriverWait(self.driver, timeout).until(card_visible_ec)
-            return True
-        except TimeoutException:
-            return False

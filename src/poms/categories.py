@@ -1,7 +1,10 @@
-"""Categories page of the Coles website"""
+"""
+Page Object Model for Coles browse page.
+"""
 
 from selenium.webdriver.common.by import By
-from colesbot.pages.base import BasePage
+
+from .base import BasePage
 
 
 class CategoriesPageLocators:
