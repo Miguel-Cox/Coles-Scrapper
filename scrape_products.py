@@ -85,11 +85,92 @@ def update_csv_with_archive(
         logger.info("Archived %d duplicate rows to %s", len(df_dropped), archive_path)
 
 
+def process_product_data(input_path, output_path):
+    """
+    Reads scraped product data from a CSV, extracts and transforms
+    fields, renames and reorders columns, and saves the processed product data
+    to the output path.
+    """
+    df = pd.read_csv(input_path).copy()
+
+    # Prepend base URL for product and image URLs.
+    df["url"] = "https://www.coles.com.au" + df["url"]
+    df["image_url"] = "https://www.coles.com.au" + df["image_url"]
+
+    # Extract fields using regex.
+    df["product_id"] = df["url"].str.extract(r"product\/(.+)\-\d+$")
+    df["size"] = df["name"].str.extract(r"\| (.+)$")
+    df["price_aud"] = df["price"].str.extract(r"\$([\d,]+\.\d+)").astype(float)
+    df["was_price_aud"] = (
+        df["price_calc_method"].str.extract(r"Was \$([\d,]+\.\d+)").astype(float)
+    )
+    df["was_date"] = df["price_calc_method"].str.extract(
+        r"Was \$[\d,]+\.\d+ on (\w{3} \d{4})"
+    )
+    df["unit_price_aud"] = (
+        df["price_calc_method"]
+        .str.replace(",", "")
+        .str.extract(r"\$([\d,]+\.\d+) per")
+        .astype(float)
+    )
+    df["unit"] = (
+        df["price_calc_method"]
+        .str.replace("Was", "")
+        .str.extract(r"\$[\d,]+\.\d+ per (\w+)(?:\s*Was)?")
+    )
+
+    # Remove duplicate products.
+    df.drop_duplicates(subset=["product_id"], keep="first", inplace=True)
+
+    # Rename columns for clarity.
+    df = df.rename(
+        columns={
+            "name": "product_name",
+            "url": "product_url",
+            "price": "display_price",
+            "price_calc_method": "pricing_details",
+            "image_url": "product_image_url",
+            "date": "scrape_date",
+            "timestamp": "scrape_timestamp",
+            "price_aud": "current_price_aud",
+            "was_price_aud": "previous_price_aud",
+            "was_date": "previous_price_date",
+            "unit": "unit_of_measure",
+        }
+    )
+
+    # Reorder columns to group related information.
+    cols_order = [
+        "product_id",
+        "product_name",
+        "category",
+        "size",
+        "product_url",
+        "product_image_url",
+        "display_price",
+        "current_price_aud",
+        "unit_price_aud",
+        "unit_of_measure",
+        "previous_price_aud",
+        "pricing_details",
+        "previous_price_date",
+        "scrape_date",
+        "scrape_timestamp",
+    ]
+    df = df[cols_order]
+
+    # Ensure the output directory exists and save the processed data.
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    df.to_csv(output_path, index=False)
+
+
 def dump_products(products: List[ProductTile], category: str) -> None:
     """
-    Converts the products list to a DataFrame, adds category, date, and timestamp columns,
-    and saves to data/raw/products.csv. If the CSV already exists, the new data is appended,
-    and duplicate rows are removed (keeping only the latest record based on the timestamp).
+    Process and archive new product data for a given category.
+
+    This function converts a list of ProductTile objects into a DataFrame,
+    enriches it with metadata, appends it to the raw products CSV (archiving duplicates),
+    and regenerates the processed products dataset.
     """
     if not products:
         logger.info("No products to save for category '%s'.", category)
@@ -103,9 +184,12 @@ def dump_products(products: List[ProductTile], category: str) -> None:
 
     target_file = os.path.join("data", "raw", "products.csv")
     archive_file = os.path.join("data", "archive", "products_dropped.csv")
+    processed_file = os.path.join("data", "processed", "products.csv")
 
     update_csv_with_archive(df_new, target_file, archive_file)
     logger.info("Processed %d new rows for category '%s'.", len(df_new), category)
+
+    process_product_data(input_path=target_file, output_path=processed_file)
 
 
 if __name__ == "__main__":
