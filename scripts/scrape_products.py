@@ -215,6 +215,7 @@ if __name__ == "__main__":
         "deli",
         "pet",
         "baby",
+        "liquor",
     ]
     headers = {
         "cookie": None,
