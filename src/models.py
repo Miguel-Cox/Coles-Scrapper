@@ -17,6 +17,11 @@ class ProductTile:
     price: Optional[str] = field(default=None)
     price_calc_method: Optional[str] = field(default=None)
     image_url: Optional[str] = field(default=None)
+    # Discount-related fields
+    was_price: Optional[str] = field(default=None)
+    discount_percentage: Optional[str] = field(default=None)
+    special_type: Optional[str] = field(default=None)  # e.g., "Half Price", "Special", "Down Down"
+    is_on_special: bool = field(default=False)
 
     def __repr__(self):
         repr_string = (
@@ -25,6 +30,10 @@ class ProductTile:
             f"  Name               : {self.name or 'N/A'}\n"
             f"  URL                : {self.url or 'N/A'}\n"
             f"  Price              : {self.price or 'N/A'}\n"
+            f"  Was Price          : {self.was_price or 'N/A'}\n"
+            f"  Discount %         : {self.discount_percentage or 'N/A'}\n"
+            f"  Special Type       : {self.special_type or 'N/A'}\n"
+            f"  On Special         : {self.is_on_special}\n"
             f"  Price Calculation  : {self.price_calc_method or 'N/A'}\n"
             f"  Image URL          : {self.image_url or 'N/A'}\n"
             f"{'='*40}\n"
