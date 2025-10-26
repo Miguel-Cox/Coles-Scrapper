@@ -148,8 +148,6 @@ def process_product_data(input_path, output_path):
         "product_name",
         "category",
         "size",
-        "product_url",
-        "product_image_url",
         "display_price",
         "current_price_aud",
         "unit_price_aud",
@@ -157,6 +155,8 @@ def process_product_data(input_path, output_path):
         "previous_price_aud",
         "pricing_details",
         "previous_price_date",
+        "product_url",
+        "product_image_url",
         "scrape_date",
         "scrape_timestamp",
     ]

@@ -6,6 +6,7 @@ import logging
 import os
 import sys
 import time
+import json
 from dataclasses import dataclass
 from datetime import datetime
 from typing import List, Optional
@@ -75,6 +76,51 @@ def extract_discount_products(fetcher: ColesPageFetcher, query: SpecialsQuery) -
         return []
 
 
+def load_product_categories() -> (dict, list):
+    """
+    Loads product to category mapping and food categories list.
+    
+    This function attempts to load a `product_mapping.json` file from `data/processed/`.
+    If the file is not found, it returns an empty dict and generates the mapping from products.csv.
+    """
+    mapping_path = os.path.join("data", "processed", "product_mapping.json")
+    products_path = os.path.join("data", "processed", "products.csv")
+    
+    food_categories = [
+        "fruit-vegetables",
+        "meat-seafood",
+        "dairy-eggs-fridge",
+        "bakery",
+        "deli",
+        "pantry",
+        "frozen",
+    ]
+    
+    if os.path.exists(mapping_path):
+        with open(mapping_path, 'r') as f:
+            product_to_category = json.load(f)
+        logger.info("Loaded product to category mapping from %s", mapping_path)
+    elif os.path.exists(products_path):
+        # Generate mapping from products.csv
+        logger.info("Generating product to category mapping from %s", products_path)
+        df = pd.read_csv(products_path, usecols=["product_id", "category"])
+        product_to_category = df.set_index("product_id")["category"].to_dict()
+        
+        # Save the mapping for future use
+        os.makedirs(os.path.dirname(mapping_path), exist_ok=True)
+        with open(mapping_path, 'w') as f:
+            json.dump(product_to_category, f, indent=2)
+        logger.info("Saved product to category mapping to %s", mapping_path)
+    else:
+        logger.warning(
+            "Neither %s nor %s found. Will use 'discount' as category for all products.",
+            mapping_path, products_path
+        )
+        product_to_category = {}
+    
+    return product_to_category, food_categories
+
+
 def process_discount_data(products: List[ProductTile]) -> pd.DataFrame:
     """
     Process discount product data to match scrape_products format.
@@ -85,6 +131,8 @@ def process_discount_data(products: List[ProductTile]) -> pd.DataFrame:
     if not products:
         return pd.DataFrame()
     
+    product_to_category, food_categories = load_product_categories()
+    
     df = pd.DataFrame([product.dict() for product in products])
     
     # Prepend base URL for product and image URLs
@@ -93,24 +141,33 @@ def process_discount_data(products: List[ProductTile]) -> pd.DataFrame:
     
     # Extract fields using regex (same as scrape_products)
     df["product_id"] = df["url"].str.extract(r"product\/(.+)\-\d+$")[0]
-    df["size"] = df["name"].str.extract(r"\| (.+)$")[0]
-    df["price_aud"] = df["price"].str.extract(r"\$([\d,]+\.\d+)")[0].str.replace(",", "", regex=False).astype(float)
+    
+    if product_to_category:
+        df["category"] = df["product_id"].map(product_to_category)
+        df.dropna(subset=['category'], inplace=True) # Remove products with no category
+        df = df[df["category"].isin(food_categories)].copy()
+    else:
+        logger.warning("Product to category mapping is empty. Cannot filter for food products.")
+        df["category"] = "discount" # Fallback to original behavior
+
+    df["size"] = df["name"].str.extract(r"\| (.+)$")
+    df["price_aud"] = df["price"].str.extract(r"\$([\d,]+\.\d+)").astype(float)
     df["was_price_aud"] = (
-        df["price_calc_method"].str.extract(r"Was \$([\d,]+\.\d+)")[0].str.replace(",", "", regex=False).astype(float)
+        df["price_calc_method"].str.extract(r"Was \$([\d,]+\.\d+)").astype(float)
     )
     df["was_date"] = df["price_calc_method"].str.extract(
         r"Was \$[\d,]+\.\d+ on (\w{3} \d{4})"
-    )[0]
+    )
     df["unit_price_aud"] = (
         df["price_calc_method"]
-        .str.replace(",", "", regex=False)
-        .str.extract(r"\$([\d,]+\.\d+) per")[0]
+        .str.replace(",", "")
+        .str.extract(r"\$([\d,]+\.\d+) per")
         .astype(float)
     )
     df["unit"] = (
         df["price_calc_method"]
-        .str.replace("Was", "", regex=False)
-        .str.extract(r"\$[\d,]+\.\d+ per (\w+)(?:\s*Was)?")[0]
+        .str.replace("Was", "")
+        .str.extract(r"\$[\d,]+\.\d+ per (\w+)(?:\s*Was)?")
     )
     
     # Filter: Keep only products where current price is lower than previous price
@@ -134,17 +191,12 @@ def process_discount_data(products: List[ProductTile]) -> pd.DataFrame:
         }
     )
     
-    # Add category as "discount" to match products format
-    df["category"] = "discount"
-    
     # Reorder columns to match scrape_products format exactly
     cols_order = [
         "product_id",
         "product_name",
         "category",
         "size",
-        "product_url",
-        "product_image_url",
         "display_price",
         "current_price_aud",
         "unit_price_aud",
@@ -152,6 +204,8 @@ def process_discount_data(products: List[ProductTile]) -> pd.DataFrame:
         "previous_price_aud",
         "pricing_details",
         "previous_price_date",
+        "product_url",
+        "product_image_url",
     ]
     
     # Keep only the columns that exist
@@ -169,13 +223,13 @@ def save_discount_products(products: List[ProductTile], filter_type: Optional[st
     :param filter_type: Type of special filter used (e.g., 'halfprice')
     """
     if not products:
-        logger.info("No discount products to save for filter '%s'.", filter_type or "all")
+        logger.info("No discount products to save for filter '%s'.", filter_type)
         return
 
     df_processed = process_discount_data(products)
     
     if df_processed.empty:
-        logger.info("No products with valid discounts (current < previous price) for filter '%s'.", filter_type or "all")
+        logger.info("No products with valid discounts (current < previous price) for filter '%s'.", filter_type)
         return
     
     now = datetime.now(tz=LOCAL_TZ)
@@ -186,16 +240,21 @@ def save_discount_products(products: List[ProductTile], filter_type: Optional[st
     output_dir = os.path.join("data", "discounts")
     os.makedirs(output_dir, exist_ok=True)
     
+    if filter_type == 'halfprice':
+        file_key = '50_percent_off'
+    else:
+        file_key = 'minor_discounts'
+
     # Save to timestamped file
     timestamp_str = now.strftime("%Y%m%d_%H%M%S")
-    filename = f"discounts_{filter_type or 'all'}_{timestamp_str}.csv"
+    filename = f"discounts_{file_key}_{timestamp_str}.csv"
     output_path = os.path.join(output_dir, filename)
     
     df_processed.to_csv(output_path, index=False)
     logger.info("Saved %d discount products to %s", len(df_processed), output_path)
     
     # Also save to latest file for easy access
-    latest_filename = f"discounts_{filter_type or 'all'}_latest.csv"
+    latest_filename = f"discounts_{file_key}_latest.csv"
     latest_path = os.path.join(output_dir, latest_filename)
     df_processed.to_csv(latest_path, index=False)
     logger.info("Also saved to %s", latest_path)
@@ -209,13 +268,12 @@ def scrape_all_discount_types(fetcher: ColesPageFetcher):
     """
     # Different special filter types to try
     filter_types = [
-        None,  # All specials
         "halfprice",  # Half price specials
         "special",  # General specials
     ]
     
     for filter_type in filter_types:
-        logger.info("Starting to scrape discount type: %s", filter_type or "all_specials")
+        logger.info("Starting to scrape discount type: %s", filter_type)
         
         query = SpecialsQuery(filter_type=filter_type, page=1)
         all_products = []
@@ -247,7 +305,12 @@ def analyze_discount_data(filter_type: Optional[str] = None):
     
     :param filter_type: Type of discount filter to analyze
     """
-    filename = f"discounts_{filter_type or 'all'}_latest.csv"
+    if filter_type == 'halfprice':
+        file_key = '50_percent_off'
+    else:
+        file_key = 'minor_discounts'
+
+    filename = f"discounts_{{file_key}}_latest.csv"
     data_path = os.path.join("data", "discounts", filename)
     
     if not os.path.exists(data_path):
@@ -256,7 +319,7 @@ def analyze_discount_data(filter_type: Optional[str] = None):
     
     df = pd.read_csv(data_path)
     
-    logger.info("=== DISCOUNT ANALYSIS for %s ===", filter_type or "ALL SPECIALS")
+    logger.info("=== DISCOUNT ANALYSIS for %s ===", filter_type)
     logger.info("Total discount products found: %d", len(df))
     
     if 'previous_price_aud' in df.columns and 'current_price_aud' in df.columns:
@@ -301,7 +364,7 @@ if __name__ == "__main__":
         logger.info("ANALYSIS COMPLETE - Showing Results")
         logger.info("="*50)
         
-        for filter_type in [None, "halfprice", "special"]:
+        for filter_type in ["halfprice", "special"]:
             analyze_discount_data(filter_type)
             logger.info("")
             
