@@ -32,7 +32,7 @@ def extract_recipe_data(driver, recipe_url: str) -> Optional[Dict]:
     
     :param driver: Selenium WebDriver instance
     :param recipe_url: URL of the recipe to scrape
-    :return: Dictionary with recipeId and totalSavings, or None if not found
+    :return: Dictionary with recipe URL, total_savings, and full product JSON, or None if not found
     """
     try:
         logger.info(f"Visiting recipe: {recipe_url}")
@@ -43,18 +43,22 @@ def extract_recipe_data(driver, recipe_url: str) -> Optional[Dict]:
         # Visit the recipe page
         driver.get(recipe_url)
         
-        # Wait for page to load and API calls to complete
-        time.sleep(5)
+        # Wait for the products API request to appear (max 2 seconds)
+        max_wait = 2
+        start_time = time.time()
+        api_found = False
         
-        logger.info(f"Total requests captured: {len(driver.requests)}")
+        while time.time() - start_time < max_wait:
+            for request in driver.requests:
+                if '/api/bff/recipes/' in request.url and '/products' in request.url:
+                    api_found = True
+                    break
+            if api_found:
+                break
+            time.sleep(0.2)  # Check every 0.2 seconds
         
-        # First, log ALL requests to see what's being captured
-        logger.info("=== ALL CAPTURED REQUESTS ===")
-        for i, request in enumerate(driver.requests[:20], 1):  # Show first 20
-            logger.info(f"{i}. {request.url}")
-        
-        if len(driver.requests) > 20:
-            logger.info(f"... and {len(driver.requests) - 20} more requests")
+        elapsed = time.time() - start_time
+        logger.info(f"API request captured in {elapsed:.2f} seconds")
         
         # Look for the products API request: /api/bff/recipes/{id}/products
         for request in driver.requests:
@@ -78,15 +82,14 @@ def extract_recipe_data(driver, recipe_url: str) -> Optional[Dict]:
                         
                         logger.info(f"Response keys: {list(response_data.keys())}")
                         
-                        # Extract recipeId and totalSavings
-                        recipe_id = response_data.get('recipeId')
-                        total_savings = response_data.get('totalSavings')
+                        # Extract total_savings for sorting
+                        total_savings = response_data.get('totalSavings', 0)
                         
-                        logger.info(f"✓ Found recipe data - ID: {recipe_id}, Savings: {total_savings}")
+                        logger.info(f"✓ Found recipe data - Savings: {total_savings}")
                         return {
                             'recipe_url': recipe_url,
-                            'recipe_id': recipe_id,
-                            'total_savings': total_savings
+                            'total_savings': total_savings,
+                            'product_json': response_data  # Store complete JSON
                         }
                 except Exception as e:
                     logger.warning(f"✗ Error parsing request {request.url}: {e}")
@@ -100,44 +103,111 @@ def extract_recipe_data(driver, recipe_url: str) -> Optional[Dict]:
         return None
 
 
-def get_recipe_links(driver, category_url: str) -> List[str]:
+def get_recipe_links(driver, category_url: str, max_recipes: int = 500) -> List[str]:
     """
-    Get all recipe links from the category page.
+    Get all recipe links from the category page with pagination.
     
     :param driver: Selenium WebDriver instance
     :param category_url: URL of the recipe category page
+    :param max_recipes: Maximum number of recipes to collect
     :return: List of recipe URLs
     """
+    all_recipe_urls = set()
+    page = 5
+    
     try:
-        logger.info(f"Loading category page: {category_url}")
-        driver.get(category_url)
+        while len(all_recipe_urls) < max_recipes:
+            # Construct paginated URL
+            if page == 1:
+                page_url = category_url
+            else:
+                # Add page parameter to URL
+                separator = '&' if '?' in category_url else '?'
+                page_url = f"{category_url}{separator}page={page}"
+            
+            logger.info(f"Loading category page {page}: {page_url}")
+            driver.get(page_url)
+            
+            # Wait for recipe cards to load
+            try:
+                WebDriverWait(driver, 10).until(
+                    EC.presence_of_element_located((By.CSS_SELECTOR, "a[href*='/recipes/']"))
+                )
+            except:
+                logger.info(f"No recipes found on page {page}. Reached end of pagination.")
+                break
+            
+            # Find all recipe links on current page
+            recipe_elements = driver.find_elements(By.CSS_SELECTOR, "a[href*='/recipes/']")
+            
+            # Extract unique URLs from current page
+            page_recipe_urls = set()
+            for element in recipe_elements:
+                href = element.get_attribute('href')
+                if href and '/recipes/' in href and '/category/' not in href:
+                    page_recipe_urls.add(href)
+            
+            # If no new recipes found, we've reached the end
+            if not page_recipe_urls:
+                logger.info(f"No recipes found on page {page}. Stopping pagination.")
+                break
+            
+            # Add new recipes to the set
+            before_count = len(all_recipe_urls)
+            all_recipe_urls.update(page_recipe_urls)
+            new_recipes = len(all_recipe_urls) - before_count
+            
+            logger.info(f"Page {page}: Found {new_recipes} new recipes (Total: {len(all_recipe_urls)})")
+            
+            # If no new recipes were added, we've likely reached the end
+            if new_recipes == 0:
+                logger.info(f"No new recipes on page {page}. Stopping pagination.")
+                break
+            
+            page += 1
+            time.sleep(1)  # Be polite to the server
         
-        # Wait for recipe cards to load
-        WebDriverWait(driver, 10).until(
-            EC.presence_of_element_located((By.CSS_SELECTOR, "a[href*='/recipes/']"))
-        )
-        
-        # Find all recipe links
-        recipe_elements = driver.find_elements(By.CSS_SELECTOR, "a[href*='/recipes/']")
-        
-        # Extract unique URLs
-        recipe_urls = set()
-        for element in recipe_elements:
-            href = element.get_attribute('href')
-            if href and '/recipes/' in href and '/category/' not in href:
-                recipe_urls.add(href)
-        
-        logger.info(f"Found {len(recipe_urls)} unique recipes")
-        return list(recipe_urls)
+        logger.info(f"Found {len(all_recipe_urls)} unique recipes across {page} page(s)")
+        return list(all_recipe_urls)
         
     except Exception as e:
         logger.error(f"Error getting recipe links: {e}")
+        return list(all_recipe_urls) if all_recipe_urls else []
+
+
+def keep_top_recipes(recipes_data: List[Dict], top_n: int = 20) -> List[Dict]:
+    """
+    Keep only the top N recipes with the highest total_savings.
+    Inserts new recipes and maintains sorted order.
+    
+    :param recipes_data: List of dictionaries containing recipe data
+    :param top_n: Number of top recipes to keep (default: 20)
+    :return: Sorted list of top N recipes by total_savings
+    """
+    if not recipes_data:
         return []
+    
+    # Sort by total_savings in descending order
+    sorted_recipes = sorted(
+        recipes_data, 
+        key=lambda x: x.get('total_savings', 0), 
+        reverse=True
+    )
+    
+    # Keep only top N
+    top_recipes = sorted_recipes[:top_n]
+    
+    logger.info(f"Kept top {len(top_recipes)} recipes out of {len(recipes_data)}")
+    if top_recipes:
+        logger.info(f"Savings range: {top_recipes[0].get('total_savings')} to {top_recipes[-1].get('total_savings')}")
+    
+    return top_recipes
 
 
 def save_recipes_data(recipes_data: List[Dict]) -> None:
     """
-    Save recipe data to CSV file.
+    Save recipe data to JSON file.
+    Stores only top 20 recipes with highest total_savings.
     
     :param recipes_data: List of dictionaries containing recipe data
     """
@@ -145,21 +215,19 @@ def save_recipes_data(recipes_data: List[Dict]) -> None:
         logger.info("No recipe data to save.")
         return
     
-    df = pd.DataFrame(recipes_data)
-    
-    # Add scraping metadata
-    now = datetime.now(tz=LOCAL_TZ)
-    df['scrape_date'] = now.strftime("%Y-%m-%d")
-    df['scrape_timestamp'] = now.isoformat()
+    # Keep only top 20 recipes
+    top_recipes = keep_top_recipes(recipes_data, top_n=20)
     
     # Create output directory if it doesn't exist
     output_dir = os.path.join("data", "recipes")
     os.makedirs(output_dir, exist_ok=True)
     
-    # Save to CSV
-    output_path = os.path.join(output_dir, "recipes.csv")
-    df.to_csv(output_path, index=False)
-    logger.info(f"Saved {len(df)} recipes to {output_path}")
+    # Save to JSON file (preserves complete product_json structure)
+    output_path = os.path.join(output_dir, "recipes.json")
+    with open(output_path, 'w') as f:
+        json.dump(top_recipes, f, indent=2)
+    
+    logger.info(f"Saved {len(top_recipes)} recipes to {output_path}")
 
 
 def scrape_dinner_recipes():
@@ -167,6 +235,7 @@ def scrape_dinner_recipes():
     Main function to scrape dinner recipes from Coles website.
     """
     category_url = "https://www.coles.com.au/recipes-inspiration/category/meal/dinner"
+    max_recipes = 200
     
     driver = None
     try:
@@ -174,16 +243,16 @@ def scrape_dinner_recipes():
         logger.info("Initializing driver...")
         driver = init_seleniumwire_webdriver()
         
-        # Get all recipe links from the category page
-        recipe_urls = get_recipe_links(driver, category_url)
+        # Get all recipe links from the category page with pagination
+        recipe_urls = get_recipe_links(driver, category_url, max_recipes=max_recipes)
         
         if not recipe_urls:
             logger.warning("No recipe URLs found. Exiting.")
             return
         
-        # Limit to first 10 recipes for testing
-        recipe_urls = recipe_urls[:10]
-        logger.info(f"Processing first {len(recipe_urls)} recipes")
+        # Limit to max_recipes
+        recipe_urls = recipe_urls[:max_recipes]
+        logger.info(f"Processing {len(recipe_urls)} recipes")
         
         # Extract data from each recipe
         recipes_data = []
@@ -193,10 +262,6 @@ def scrape_dinner_recipes():
             recipe_data = extract_recipe_data(driver, recipe_url)
             if recipe_data:
                 recipes_data.append(recipe_data)
-            
-            # Add delay between requests to be respectful
-            if i < len(recipe_urls):
-                time.sleep(2)
         
         # Save the collected data
         save_recipes_data(recipes_data)
